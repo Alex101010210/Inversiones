@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  portfolios   Portfolio[]
+}
+
+// ─── Portfolio ───────────────────────────────────────────────────────────────
+
+model Portfolio {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  currency    String      @default("USD")
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  holdings    Holding[]
+  operations  Operation[]
+}
+
+model Asset {
+  id          String      @id @default(cuid())
+  symbol      String      @unique
+  name        String
+  type        AssetType
+  exchange    String?
+  sector      String?
+  currency    String      @default("USD")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  holdings      Holding[]
+  operations    Operation[]
+  prices        PriceHistory[]
+  priceAlerts   PriceAlert[]
+  watchlistItems WatchlistItem[]
+}
+
+model Holding {
+  id           String    @id @default(cuid())
+  portfolioId  String
+  assetId      String
+  quantity     Float
+  avgCostBasis Float
+  portfolio    Portfolio @relation(fields: [portfolioId], references: [id])
+  asset        Asset     @relation(fields: [assetId], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([portfolioId, assetId])
+}
+
+// ─── Operations ──────────────────────────────────────────────────────────────
+
+model Operation {
+  id          String        @id @default(cuid())
+  portfolioId String
+  assetId     String
+  type        OperationType
+  quantity    Float
+  price       Float
+  fees        Float         @default(0)
+  date        DateTime
+  notes       String?
+  portfolio   Portfolio     @relation(fields: [portfolioId], references: [id])
+  asset       Asset         @relation(fields: [assetId], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+// ─── Price History ───────────────────────────────────────────────────────────
+
+model PriceHistory {
+  id        String   @id @default(cuid())
+  assetId   String
+  date      DateTime
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  volume    Float
+  asset     Asset    @relation(fields: [assetId], references: [id])
+
+  @@unique([assetId, date])
+  @@index([assetId, date])
+}
+
+// ─── Risk Snapshots ──────────────────────────────────────────────────────────
+
+model RiskSnapshot {
+  id              String   @id @default(cuid())
+  portfolioId     String
+  date            DateTime
+  totalValue      Float
+  drawdown        Float
+  volatility      Float
+  sharpeRatio     Float
+  beta            Float?
+  var95           Float?   // Value at Risk 95%
+  createdAt       DateTime @default(now())
+
+  @@index([portfolioId, date])
+}
+
+// ─── Price Alerts ────────────────────────────────────────────────────────────
+
+model PriceAlert {
+  id             String    @id @default(cuid())
+  userId         String
+  assetId        String
+  condition      String    // 'ABOVE' | 'BELOW'
+  threshold      Float
+  note           String?
+  active         Boolean   @default(true)
+  triggeredAt    DateTime?
+  triggeredPrice Float?
+  createdAt      DateTime  @default(now())
+  asset          Asset     @relation(fields: [assetId], references: [id])
+
+  @@index([userId, active])
+}
+
+// ─── Watchlist ───────────────────────────────────────────────────────────────
+
+model WatchlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  assetId   String
+  note      String?
+  createdAt DateTime @default(now())
+  asset     Asset    @relation(fields: [assetId], references: [id])
+
+  @@unique([userId, assetId])
+}
+
+// ─── AI Insights ─────────────────────────────────────────────────────────────
+
+model AiInsight {
+  id          String      @id @default(cuid())
+  portfolioId String?
+  assetId     String?
+  type        InsightType
+  title       String
+  content     String
+  confidence  Float?
+  createdAt   DateTime    @default(now())
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum AssetType {
+  STOCK
+  ETF
+  CRYPTO
+  BOND
+  COMMODITY
+}
+
+enum OperationType {
+  BUY
+  SELL
+  DIVIDEND
+  SPLIT
+  TRANSFER_IN
+  TRANSFER_OUT
+}
+
+enum InsightType {
+  RECOMMENDATION
+  TREND_PREDICTION
+  NEWS_ANALYSIS
+  RISK_ALERT
+}
