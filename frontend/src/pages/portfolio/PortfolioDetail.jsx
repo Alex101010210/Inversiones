@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { portfolioApi, exportApi } from '../../api';
 import { Spinner, PageHeader, PnLBadge, Badge } from '../../components/ui/components';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Download, ChevronUp, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Download, ChevronUp, ChevronDown, BarChart2, PlusCircle } from 'lucide-react';
 import clsx from 'clsx';
 
 function SortIcon({ field, sortBy, sortDir }) {
@@ -16,6 +16,7 @@ function SortIcon({ field, sortBy, sortDir }) {
 
 export default function PortfolioDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [sortBy,  setSortBy]  = useState('symbol');
   const [sortDir, setSortDir] = useState('asc');
 
@@ -104,49 +105,69 @@ export default function PortfolioDetail() {
 
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100">
-              <th className="text-left py-3 px-4 font-medium text-gray-500 cursor-pointer hover:text-brand-600 select-none"
-                onClick={() => toggleSort('symbol')}>
-                Activo <SortIcon field="symbol" sortBy={sortBy} sortDir={sortDir} />
-              </th>
-              <th className="text-left py-3 px-4 font-medium text-gray-500">Tipo</th>
-              {th('Cant.', 'qty')}
-              {th('Costo Prom.', 'avgCost')}
-              {th('Precio', 'price')}
-              {th('Valor', 'value')}
-              {th('P&L %', 'pnlPct')}
-              {th('Fees', 'fees')}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((h) => (
-              <tr key={h.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                <td className="py-3 px-4">
-                  <div className="font-semibold">{h.asset.symbol}</div>
-                  <div className="text-xs text-gray-500">{h.asset.name}</div>
-                </td>
-                <td className="py-3 px-4"><Badge type={h.asset.type} /></td>
-                <td className="py-3 px-4 text-right font-mono">{h.quantity}</td>
-                <td className="py-3 px-4 text-right font-mono">${h.avgCostBasis.toFixed(2)}</td>
-                <td className="py-3 px-4 text-right font-mono">${h.currentPrice.toFixed(2)}</td>
-                <td className="py-3 px-4 text-right font-semibold">${h.currentValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                <td className="py-3 px-4 text-right"><PnLBadge value={h.pnlPct} /></td>
-                <td className="py-3 px-4 text-right text-gray-500">${(h.totalFees ?? 0).toFixed(2)}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot className="bg-gray-50">
-            <tr>
-              <td colSpan={5} className="py-3 px-4 font-semibold text-gray-700">Total</td>
-              <td className="py-3 px-4 text-right font-bold">${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-              <td className="py-3 px-4 text-right">
-                <PnLBadge value={totalCost > 0 ? (totalPnL / totalCost) * 100 : 0} />
-              </td>
-              <td className="py-3 px-4 text-right text-gray-500">${totalFeesPaid.toFixed(2)}</td>
-            </tr>
-          </tfoot>
-        </table>
+         <thead>
+           <tr className="border-b border-gray-100">
+             <th className="text-left py-3 px-4 font-medium text-gray-500 cursor-pointer hover:text-brand-600 select-none"
+               onClick={() => toggleSort('symbol')}>
+               Activo <SortIcon field="symbol" sortBy={sortBy} sortDir={sortDir} />
+             </th>
+             <th className="text-left py-3 px-4 font-medium text-gray-500">Tipo</th>
+             {th('Cant.', 'qty')}
+             {th('Costo Prom.', 'avgCost')}
+             {th('Precio', 'price')}
+             {th('Valor', 'value')}
+             {th('P&L %', 'pnlPct')}
+             {th('Fees', 'fees')}
+             <th className="py-3 px-4 font-medium text-gray-500 text-right">Acciones</th>
+           </tr>
+         </thead>
+         <tbody>
+           {sorted.map((h) => (
+             <tr key={h.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+               <td className="py-3 px-4">
+                 <div className="font-semibold">{h.asset.symbol}</div>
+                 <div className="text-xs text-gray-500">{h.asset.name}</div>
+               </td>
+               <td className="py-3 px-4"><Badge type={h.asset.type} /></td>
+               <td className="py-3 px-4 text-right font-mono">{h.quantity}</td>
+               <td className="py-3 px-4 text-right font-mono">${h.avgCostBasis.toFixed(2)}</td>
+               <td className="py-3 px-4 text-right font-mono">${h.currentPrice.toFixed(2)}</td>
+               <td className="py-3 px-4 text-right font-semibold">${h.currentValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+               <td className="py-3 px-4 text-right"><PnLBadge value={h.pnlPct} /></td>
+               <td className="py-3 px-4 text-right text-gray-500">${(h.totalFees ?? 0).toFixed(2)}</td>
+               <td className="py-3 px-4 text-right">
+                 <div className="flex items-center justify-end gap-2">
+                   <button
+                     onClick={() => navigate(`/analysis?symbol=${h.asset.symbol}`)}
+                     className="text-gray-400 hover:text-brand-600 transition-colors"
+                     title="Ver análisis técnico"
+                   >
+                     <BarChart2 className="w-4 h-4" />
+                   </button>
+                   <button
+                     onClick={() => navigate('/operations', { state: { prefill: { assetSymbol: h.asset.symbol, portfolioId: id } } })}
+                     className="text-gray-400 hover:text-green-600 transition-colors"
+                     title="Registrar operación"
+                   >
+                     <PlusCircle className="w-4 h-4" />
+                   </button>
+                 </div>
+               </td>
+             </tr>
+           ))}
+         </tbody>
+         <tfoot className="bg-gray-50">
+           <tr>
+             <td colSpan={5} className="py-3 px-4 font-semibold text-gray-700">Total</td>
+             <td className="py-3 px-4 text-right font-bold">${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+             <td className="py-3 px-4 text-right">
+               <PnLBadge value={totalCost > 0 ? (totalPnL / totalCost) * 100 : 0} />
+             </td>
+             <td className="py-3 px-4 text-right text-gray-500">${totalFeesPaid.toFixed(2)}</td>
+             <td />
+           </tr>
+         </tfoot>
+       </table>
       </div>
     </div>
   );

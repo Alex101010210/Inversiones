@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { analysisApi, assetApi } from '../../api';
 import { PageHeader, Spinner, Badge } from '../../components/ui/components';
@@ -6,14 +6,25 @@ import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, ReferenceLine
 } from 'recharts';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-const POPULAR = ['AAPL', 'MSFT', 'TSLA', 'NVDA', 'SPY', 'QQQ', 'BTC', 'ETH'];
+const POPULAR = ['AAPL', 'MSFT', 'TSLA', 'NVDA', 'SPY', 'QQQ', 'BTC', 'ETH', 'GOOGL', 'AMZN'];
 
 export default function Analysis() {
-  const [symbol, setSymbol]     = useState('AAPL');
-  const [input,  setInput]      = useState('AAPL');
+  const location = useLocation();
+  const navigate  = useNavigate();
+
+  // Read ?symbol= from URL so Watchlist/Screener can deep-link here
+  const urlSymbol = new URLSearchParams(location.search).get('symbol')?.toUpperCase() ?? 'AAPL';
+  const [symbol, setSymbol]     = useState(urlSymbol);
+  const [input,  setInput]      = useState(urlSymbol);
   const [activeTab, setActiveTab] = useState('macd');
+
+  // Sync URL symbol changes (e.g. user navigates from Watchlist)
+  useEffect(() => {
+    const s = new URLSearchParams(location.search).get('symbol')?.toUpperCase();
+    if (s && s !== symbol) { setSymbol(s); setInput(s); }
+  }, [location.search]);
 
   const { data: full, isLoading: fLoading, refetch } = useQuery({
     queryKey: ['analysis-full', symbol],
@@ -83,12 +94,12 @@ export default function Analysis() {
       />
 
       {/* Search bar */}
-      <form onSubmit={handleSearch} className="flex gap-2 items-center">
-        <input className="input max-w-xs" placeholder="Symbol (AAPL, BTC…)" value={input} onChange={(e) => setInput(e.target.value)} />
-        <button className="btn-primary" type="submit">Analyze</button>
+      <form onSubmit={handleSearch} className="flex gap-2 items-center flex-wrap">
+        <input className="input max-w-xs" placeholder="Símbolo (AAPL, BTC…)" value={input} onChange={(e) => setInput(e.target.value)} />
+        <button className="btn-primary" type="submit">Analizar</button>
         <div className="flex gap-1 flex-wrap">
           {POPULAR.map(s => (
-            <button key={s} type="button" onClick={() => { setSymbol(s); setInput(s); }}
+            <button key={s} type="button" onClick={() => { setSymbol(s); setInput(s); navigate(`/analysis?symbol=${s}`, { replace: true }); }}
               className={`px-2 py-1 text-xs rounded-full border transition-colors ${symbol === s ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-300 text-gray-600 hover:border-brand-400'}`}>
               {s}
             </button>
@@ -101,11 +112,18 @@ export default function Analysis() {
           {/* Signal summary */}
           <div className="card flex flex-wrap gap-6 items-center">
             <div>
-              <p className="text-xs text-gray-500 mb-1">Symbol</p>
+              <p className="text-xs text-gray-500 mb-1">Símbolo</p>
               <p className="font-bold text-xl">{full.symbol}</p>
             </div>
+            {/* Current price from price history */}
+            {prices && prices.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Precio actual</p>
+                <p className="font-bold text-xl text-gray-900">${prices[prices.length - 1]?.close?.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+              </div>
+            )}
             <div>
-              <p className="text-xs text-gray-500 mb-1">Signal</p>
+              <p className="text-xs text-gray-500 mb-1">Señal</p>
               <span className={`badge text-sm px-3 py-1 font-semibold ${getSignalClass(full.signal)}`}>{full.signal}</span>
             </div>
             <div>
@@ -125,20 +143,28 @@ export default function Analysis() {
               <p className="font-bold">{full.sma50 ?? '—'}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-1">Price vs SMA20</p>
+              <p className="text-xs text-gray-500 mb-1">EMA 20</p>
+              <p className="font-bold">{full.ema20 ?? '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Precio vs SMA20</p>
               <span className={`text-sm font-medium ${full.priceAboveSMA20 ? 'text-success' : 'text-danger'}`}>
-                {full.priceAboveSMA20 ? '▲ Above' : '▼ Below'}
+                {full.priceAboveSMA20 ? '▲ Por encima' : '▼ Por debajo'}
               </span>
             </div>
           </div>
 
           {/* Chart tabs */}
           <div>
-            <div className="flex gap-2 mb-4">
-              {['price', 'macd', 'rsi'].map(tab => (
-                <button key={tab} onClick={() => setActiveTab(tab)}
-                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${activeTab === tab ? 'bg-brand-600 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:border-brand-400'}`}>
-                  {tab.toUpperCase()}
+            <div className="flex gap-2 mb-4 flex-wrap">
+              {[
+                { id: 'price', label: 'Precio + Medias' },
+                { id: 'macd',  label: 'MACD' },
+                { id: 'rsi',   label: 'RSI' },
+              ].map(tab => (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${activeTab === tab.id ? 'bg-brand-600 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:border-brand-400'}`}>
+                  {tab.label}
                 </button>
               ))}
             </div>

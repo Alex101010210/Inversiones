@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { aiApi, portfolioApi } from '../../api';
 import { PageHeader, Spinner, Badge } from '../../components/ui/components';
 import {
   Sparkles, TrendingUp, TrendingDown, Minus,
-  Newspaper, Lightbulb, ShieldAlert, BarChart2, Cpu
+  Newspaper, Lightbulb, ShieldAlert, BarChart2, Cpu, PlusCircle, BarChart
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -77,6 +78,7 @@ function EngineTag() {
 }
 
 export default function AiPage() {
+  const navigate = useNavigate();
   const [tab,    setTab]    = useState('recommendations');
   const [pid,    setPid]    = useState('');
   const [symbol, setSymbol] = useState('AAPL');
@@ -195,55 +197,71 @@ export default function AiPage() {
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(recs.recommendations ?? []).map((r, i) => (
-                  <div key={i} className="card space-y-3">
-                    {/* Header */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-bold text-gray-900 text-base">{r.asset}</span>
-                        {r.name && <span className="text-xs text-gray-400 ml-1.5">{r.name}</span>}
-                      </div>
-                      <ActionBadge action={r.action} />
-                    </div>
+               {(recs.recommendations ?? []).map((r, i) => (
+                 <div key={i} className="card space-y-3">
+                   {/* Header */}
+                   <div className="flex items-center justify-between">
+                     <div>
+                       <span className="font-bold text-gray-900 text-base">{r.asset}</span>
+                       {r.name && <span className="text-xs text-gray-400 ml-1.5">{r.name}</span>}
+                     </div>
+                     <ActionBadge action={r.action} />
+                   </div>
 
-                    {/* Indicadores rápidos */}
-                    <div className="grid grid-cols-3 gap-2 text-xs text-center">
-                      <div className="bg-gray-50 rounded-lg p-2">
-                        <p className="text-gray-400 mb-0.5">RSI</p>
-                        <p className={clsx('font-bold', r.rsi < 35 ? 'text-green-600' : r.rsi > 65 ? 'text-red-500' : 'text-gray-700')}>
-                          {r.rsi ?? '—'}
-                        </p>
-                      </div>
-                      <div className="bg-gray-50 rounded-lg p-2">
-                        <p className="text-gray-400 mb-0.5">P&L</p>
-                        <p className={clsx('font-bold', r.pnlPct >= 0 ? 'text-green-600' : 'text-red-500')}>
-                          {r.pnlPct >= 0 ? '+' : ''}{r.pnlPct}%
-                        </p>
-                      </div>
-                      <div className="bg-gray-50 rounded-lg p-2">
-                        <p className="text-gray-400 mb-0.5">Tendencia</p>
-                        <p className="font-bold text-gray-700">{r.trend}</p>
-                      </div>
-                    </div>
+                   {/* Indicadores rápidos */}
+                   <div className="grid grid-cols-3 gap-2 text-xs text-center">
+                     <div className="bg-gray-50 rounded-lg p-2">
+                       <p className="text-gray-400 mb-0.5">RSI</p>
+                       <p className={clsx('font-bold', r.rsi < 35 ? 'text-green-600' : r.rsi > 65 ? 'text-red-500' : 'text-gray-700')}>
+                         {r.rsi ?? '—'}
+                       </p>
+                     </div>
+                     <div className="bg-gray-50 rounded-lg p-2">
+                       <p className="text-gray-400 mb-0.5">P&L</p>
+                       <p className={clsx('font-bold', r.pnlPct >= 0 ? 'text-green-600' : 'text-red-500')}>
+                         {r.pnlPct >= 0 ? '+' : ''}{r.pnlPct}%
+                       </p>
+                     </div>
+                     <div className="bg-gray-50 rounded-lg p-2">
+                       <p className="text-gray-400 mb-0.5">Tendencia</p>
+                       <p className="font-bold text-gray-700">{r.trend}</p>
+                     </div>
+                   </div>
 
-                    {/* Razones */}
-                    <ul className="text-xs text-gray-600 space-y-1">
-                      {(r.allReasons ?? [r.reason]).slice(0, 3).map((reason, j) => (
-                        <li key={j} className="flex gap-1.5">
-                          <span className="text-gray-300 mt-0.5">•</span>
-                          <span>{reason}</span>
-                        </li>
-                      ))}
-                    </ul>
+                   {/* Razones */}
+                   <ul className="text-xs text-gray-600 space-y-1">
+                     {(r.allReasons ?? [r.reason]).slice(0, 3).map((reason, j) => (
+                       <li key={j} className="flex gap-1.5">
+                         <span className="text-gray-300 mt-0.5">•</span>
+                         <span>{reason}</span>
+                       </li>
+                     ))}
+                   </ul>
 
-                    {/* Confianza */}
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">Confianza de la señal</p>
-                      <ConfidenceBar confidence={r.confidence} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+                   {/* Confianza */}
+                   <div>
+                     <p className="text-xs text-gray-400 mb-1">Confianza de la señal</p>
+                     <ConfidenceBar confidence={r.confidence} />
+                   </div>
+
+                   {/* Acciones rápidas */}
+                   <div className="flex gap-2 pt-1 border-t border-gray-100">
+                     <button
+                       onClick={() => navigate(`/analysis?symbol=${r.asset}`)}
+                       className="flex-1 flex items-center justify-center gap-1.5 text-xs py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-brand-400 hover:text-brand-600 transition-colors"
+                     >
+                       <BarChart className="w-3.5 h-3.5" /> Ver análisis
+                     </button>
+                     <button
+                       onClick={() => navigate('/operations', { state: { prefill: { assetSymbol: r.asset, portfolioId: activePid } } })}
+                       className="flex-1 flex items-center justify-center gap-1.5 text-xs py-1.5 rounded-lg border border-brand-300 text-brand-600 hover:bg-brand-50 transition-colors font-medium"
+                     >
+                       <PlusCircle className="w-3.5 h-3.5" /> Registrar op.
+                     </button>
+                   </div>
+                 </div>
+               ))}
+             </div>
             </>
           ) : null}
         </div>

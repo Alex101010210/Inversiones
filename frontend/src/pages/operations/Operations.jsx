@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { operationApi, portfolioApi, assetApi, exportApi, importApi } from '../../api';
 import { PageHeader, Spinner, EmptyState, Badge } from '../../components/ui/components';
 import { Plus, Trash2, Pencil, Download, Upload, CheckCircle, AlertCircle, X, ChevronUp, ChevronDown, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react';
@@ -120,29 +121,35 @@ function ImportModal({ onClose }) {
 }
 
 /* ─── Operation Create/Edit Modal ────────────────────────────────────────── */
-function OperationModal({ onClose, initialData = null }) {
+function OperationModal({ onClose, initialData = null, prefill = null }) {
   const qc = useQueryClient();
   const isEditing = !!initialData;
 
-  const [form, setForm] = useState(() => initialData
-    ? {
-        portfolioId:  initialData.portfolioId,
-        assetSymbol:  initialData.asset?.symbol ?? '',
-        assetId:      initialData.assetId,
-        type:         initialData.type,
-        quantity:     String(initialData.quantity),
-        price:        String(initialData.price),
-        fees:         String(initialData.fees),
-        date:         new Date(initialData.date).toISOString().split('T')[0],
-        notes:        initialData.notes ?? '',
-      }
-    : {
-        portfolioId: '', assetSymbol: '', assetId: '', type: 'BUY',
-        quantity: '', price: '', fees: '0',
-        date: new Date().toISOString().split('T')[0], notes: '',
-      }
-  );
-  const [assetSearch, setAssetSearch] = useState(initialData?.asset?.symbol ?? '');
+  const [form, setForm] = useState(() => {
+    if (initialData) return {
+      portfolioId:  initialData.portfolioId,
+      assetSymbol:  initialData.asset?.symbol ?? '',
+      assetId:      initialData.assetId,
+      type:         initialData.type,
+      quantity:     String(initialData.quantity),
+      price:        String(initialData.price),
+      fees:         String(initialData.fees),
+      date:         new Date(initialData.date).toISOString().split('T')[0],
+      notes:        initialData.notes ?? '',
+    };
+    return {
+      portfolioId: prefill?.portfolioId ?? '',
+      assetSymbol: prefill?.assetSymbol ?? '',
+      assetId:     '',
+      type:        'BUY',
+      quantity:    '',
+      price:       '',
+      fees:        '0',
+      date:        new Date().toISOString().split('T')[0],
+      notes:       '',
+    };
+  });
+  const [assetSearch, setAssetSearch] = useState(initialData?.asset?.symbol ?? prefill?.assetSymbol ?? '');
   const [showDropdown, setShowDropdown] = useState(false);
 
   const { data: portfolios = [] } = useQuery({ queryKey: ['portfolios'], queryFn: portfolioApi.list });
@@ -281,9 +288,22 @@ function SortIcon({ field, sortBy, sortDir }) {
 /* ─── Main Page ───────────────────────────────────────────────────────────── */
 export default function Operations() {
   const qc = useQueryClient();
+  const location = useLocation();
   const [showModal, setShowModal]   = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
+  const [prefill,    setPrefill]    = useState(null);
+
+  // Open modal pre-filled when navigated from Watchlist / Screener
+  useEffect(() => {
+    const state = location.state?.prefill;
+    if (state) {
+      setPrefill(state);
+      setShowModal(true);
+      // Clear so back-navigation doesn't re-open
+      window.history.replaceState({}, '');
+    }
+  }, [location.state]);
 
   // ── Filters & pagination state ───────────────────────────────────────────
   const [filters, setFilters] = useState({
@@ -490,7 +510,7 @@ export default function Operations() {
         </>
       )}
 
-      {showModal  && <OperationModal onClose={() => setShowModal(false)} />}
+      {showModal  && <OperationModal onClose={() => { setShowModal(false); setPrefill(null); }} prefill={prefill} />}
       {editTarget && <OperationModal initialData={editTarget} onClose={() => setEditTarget(null)} />}
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
     </div>

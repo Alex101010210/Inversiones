@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, DollarSign,
-  ShieldAlert, BarChart2, Sparkles, Trophy,
+  ShieldAlert, BarChart2, Sparkles, Trophy, Layers,
 } from 'lucide-react';
 import { StatCard, PageHeader, Spinner } from '../../components/ui/components';
 import { Link } from 'react-router-dom';
@@ -18,9 +18,10 @@ import clsx from 'clsx';
 const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#06b6d4'];
 const BENCHMARKS = ['SPY', 'QQQ', 'BTC', 'VTI'];
 const PERIODS    = [
-  { label: '1M', days: 30  },
-  { label: '3M', days: 90  },
-  { label: '6M', days: 180 },
+  { label: '1M',  days: 30  },
+  { label: '3M',  days: 90  },
+  { label: '6M',  days: 180 },
+  { label: '1Y',  days: 365 },
 ];
 
 function BenchmarkTooltip({ active, payload, label }) {
@@ -56,7 +57,7 @@ export default function Dashboard() {
   const [period,     setPeriod]    = useState(90);
   const [chartMode,  setChartMode] = useState('value');
 
-  // 1. Overview
+  // 1. Overview (all portfolios)
   const { data: overview, isLoading: ovLoading, error: ovError } = useQuery({
     queryKey:  ['overview'],
     queryFn:   dashboardApi.overview,
@@ -209,6 +210,9 @@ export default function Dashboard() {
   const totalPnLPct = summary?.totalPnLPct ?? 0;
   const pos         = totalPnL >= 0;
 
+  // Grand total across ALL portfolios — provided directly by the overview endpoint
+  const grandTotal = overview?.grandTotal ?? null;
+
   const portfolioReturn = chartData.length > 1
     ? (chartData[chartData.length - 1]?.portfolioReturn ?? 0)
     : 0;
@@ -284,6 +288,25 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* Grand total across all portfolios — only when user has >1 portfolio */}
+      {grandTotal != null && availablePortfolios.length > 1 && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-5 py-4 flex flex-wrap items-center gap-4">
+          <Layers className="w-5 h-5 text-indigo-500 flex-shrink-0" />
+          <div>
+            <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wide">Total global — todos los portafolios</p>
+            <p className="text-2xl font-bold text-indigo-700">${grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+          </div>
+          <div className="ml-auto flex flex-wrap gap-3">
+            {overview.portfolios.map(p => (
+              <div key={p.id} className="text-center">
+                <p className="text-xs text-indigo-400">{p.name}</p>
+                <p className="font-semibold text-indigo-700">${(p.totalValue ?? 0).toLocaleString('en-US', { minimumFractionDigits: 0 })}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Benchmark banner */}
       {showBench && benchData && chartData.length > 0 && (
         <div className={clsx(
@@ -322,6 +345,37 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Top holdings by weight (from allocation) */}
+      {allocation?.byAsset?.length > 0 && (() => {
+        const sorted   = [...allocation.byAsset].sort((a, b) => b.pct - a.pct);
+        const topItems = sorted.slice(0, 5);
+        return (
+          <div className="card">
+            <p className="text-sm font-semibold text-gray-700 mb-3">📊 Mayores posiciones por peso</p>
+            <div className="space-y-2">
+              {topItems.map((h, i) => (
+                <div key={h.symbol} className="flex items-center gap-3 text-sm">
+                  <span className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                    style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}>
+                    {i + 1}
+                  </span>
+                  <Link to={`/analysis?symbol=${h.symbol}`}
+                    className="font-semibold text-gray-800 hover:text-brand-600 transition-colors w-16 flex-shrink-0">
+                    {h.symbol}
+                  </Link>
+                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full"
+                      style={{ width: `${h.pct}%`, background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                  </div>
+                  <span className="font-semibold text-gray-700 w-10 text-right">{h.pct}%</span>
+                  <span className="text-gray-400 w-20 text-right">${(h.value ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
@@ -329,7 +383,7 @@ export default function Dashboard() {
         <div className="card col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <h3 className="font-semibold text-gray-700">
-              Rendimiento {period === 30 ? '1 mes' : period === 90 ? '3 meses' : '6 meses'}
+              Rendimiento {period === 30 ? '1 mes' : period === 90 ? '3 meses' : period === 180 ? '6 meses' : '1 año'}
             </h3>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex gap-1">

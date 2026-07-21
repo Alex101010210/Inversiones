@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { riskApi, portfolioApi } from '../../api';
 import { Link } from 'react-router-dom';
+import { usePortfolioStore } from '../../store';
 import { PageHeader, Spinner, StatCard } from '../../components/ui/components';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
@@ -11,11 +12,12 @@ import {
 import { ShieldAlert, TrendingDown, Activity, BarChart2 } from 'lucide-react';
 
 export default function Risk() {
-  const [pid, setPid] = useState('');
+  const { activePortfolioId, setActivePortfolio } = usePortfolioStore();
 
   const { data: portfolios = [] } = useQuery({ queryKey: ['portfolios'], queryFn: portfolioApi.list });
-  const firstId = portfolios[0]?.id;
-  const activePid = pid || firstId;
+  const firstId   = portfolios[0]?.id;
+  // Sync with global store: use store value if valid, else first portfolio
+  const activePid = portfolios.find(p => p.id === activePortfolioId)?.id ?? firstId;
 
   const { data: risk, isLoading: rLoading } = useQuery({
     queryKey: ['risk', activePid],
@@ -49,12 +51,12 @@ export default function Risk() {
 
   return (
     <div className="p-8 space-y-6">
-      <div className="flex items-start justify-between">
-        <PageHeader title="Risk Analysis" subtitle="Drawdown · Volatility · Sharpe Ratio · VaR" />
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <PageHeader title="Análisis de Riesgo" subtitle="Drawdown · Volatilidad · Sharpe Ratio · VaR" />
         <select
           className="input w-48"
-          value={activePid}
-          onChange={(e) => setPid(e.target.value)}
+          value={activePid ?? ''}
+          onChange={(e) => setActivePortfolio(e.target.value)}
         >
           {portfolios.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
@@ -62,16 +64,16 @@ export default function Risk() {
 
       {/* Metric cards */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard title="Max Drawdown"   value={risk ? `${risk.drawdown}%`    : '—'} sub="Peak-to-trough loss"          icon={TrendingDown} color="red" />
-        <StatCard title="Annualised Vol" value={risk ? `${risk.volatility}%`  : '—'} sub="90-day window"                 icon={Activity}     color="yellow" />
-        <StatCard title="Sharpe Ratio"   value={risk ? risk.sharpeRatio       : '—'} sub={sharpeBadge.label ?? ''}       icon={ShieldAlert}  color="blue" />
-        <StatCard title="VaR (95%)"      value={risk ? `${risk.var95}%`       : '—'} sub="1-day loss at 95% confidence"  icon={BarChart2}    color="red" />
+        <StatCard title="Max Drawdown"   value={risk ? `${risk.drawdown}%`    : '—'} sub="Caída máxima pico-valle"           icon={TrendingDown} color="red" />
+        <StatCard title="Volatilidad"    value={risk ? `${risk.volatility}%`  : '—'} sub="Ventana 90 días anualizada"         icon={Activity}     color="yellow" />
+        <StatCard title="Sharpe Ratio"   value={risk ? risk.sharpeRatio       : '—'} sub={sharpeBadge.label ?? ''}            icon={ShieldAlert}  color="blue" />
+        <StatCard title="VaR (95%)"      value={risk ? `${risk.var95}%`       : '—'} sub="Pérdida máx. esperada en 1 día"     icon={BarChart2}    color="red" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Radar chart */}
         <div className="card">
-          <h3 className="font-semibold text-gray-700 mb-4">Risk Profile</h3>
+          <h3 className="font-semibold text-gray-700 mb-4">Perfil de Riesgo</h3>
           <ResponsiveContainer width="100%" height={260}>
             <RadarChart data={radarData}>
               <PolarGrid />
@@ -83,7 +85,7 @@ export default function Risk() {
 
         {/* Drawdown history */}
         <div className="card">
-          <h3 className="font-semibold text-gray-700 mb-4">Drawdown History (90 days)</h3>
+          <h3 className="font-semibold text-gray-700 mb-4">Historial Drawdown (90 días)</h3>
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={history}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -109,28 +111,28 @@ export default function Risk() {
 
       {/* Interpretation guide */}
       <div className="card">
-        <h3 className="font-semibold text-gray-700 mb-3">Interpretation Guide</h3>
+        <h3 className="font-semibold text-gray-700 mb-3">Guía de Interpretación</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div>
             <h4 className="font-medium text-gray-800 mb-1">Sharpe Ratio</h4>
             <ul className="text-gray-500 space-y-0.5">
-              <li><span className="text-success font-medium">&gt; 2.0</span> — Excellent</li>
-              <li><span className="text-brand-600 font-medium">1.0–2.0</span> — Good</li>
-              <li><span className="text-warn font-medium">0.0–1.0</span> — Adequate</li>
-              <li><span className="text-danger font-medium">&lt; 0.0</span> — Poor</li>
+              <li><span className="text-success font-medium">&gt; 2.0</span> — Excelente</li>
+              <li><span className="text-brand-600 font-medium">1.0–2.0</span> — Bueno</li>
+              <li><span className="text-warn font-medium">0.0–1.0</span> — Aceptable</li>
+              <li><span className="text-danger font-medium">&lt; 0.0</span> — Deficiente</li>
             </ul>
           </div>
           <div>
             <h4 className="font-medium text-gray-800 mb-1">Max Drawdown</h4>
             <ul className="text-gray-500 space-y-0.5">
-              <li><span className="text-success font-medium">&lt; 10%</span> — Low risk</li>
-              <li><span className="text-warn font-medium">10–20%</span> — Moderate</li>
-              <li><span className="text-danger font-medium">&gt; 20%</span> — High risk</li>
+              <li><span className="text-success font-medium">&lt; 10%</span> — Riesgo bajo</li>
+              <li><span className="text-warn font-medium">10–20%</span> — Moderado</li>
+              <li><span className="text-danger font-medium">&gt; 20%</span> — Riesgo alto</li>
             </ul>
           </div>
           <div>
             <h4 className="font-medium text-gray-800 mb-1">VaR 95%</h4>
-            <p className="text-gray-500">The maximum expected loss in a single day with 95% confidence. Lower is better.</p>
+            <p className="text-gray-500">Pérdida máxima esperada en un día con 95% de confianza. Menor es mejor.</p>
           </div>
         </div>
       </div>
