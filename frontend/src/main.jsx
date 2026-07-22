@@ -1,3 +1,14 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Punto de entrada del frontend React.
+// Configura:
+//   - React Query (caché de datos del servidor con staleTime 30 s)
+//   - BrowserRouter (enrutamiento del lado del cliente)
+//   - ErrorBoundary (captura errores en el árbol de componentes y muestra
+//     una pantalla de error en lugar de una página en blanco)
+//   - Tema (aplica modo oscuro/claro antes del primer render para evitar
+//     el "flash" de tema incorrecto)
+// ─────────────────────────────────────────────────────────────────────────────
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -6,16 +17,21 @@ import App from './App';
 import './index.css';
 import { useThemeStore } from './store';
 
-// Apply saved dark-mode class before first paint
+// Aplicar la clase dark/light al <html> antes del primer pintado para evitar flash
 useThemeStore.getState().initTheme();
 
+// Configuración global de React Query:
+// - staleTime 30s: los datos se consideran frescos por 30 segundos antes de refetchar
+// - retry 1: en caso de error solo reintenta una vez
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { staleTime: 30_000, retry: 1 },
   },
 });
 
-// Simple error boundary — shows the error instead of a blank page
+// ─── Error Boundary ───────────────────────────────────────────────────────────
+// Captura errores en tiempo de render y muestra un mensaje amigable con
+// el detalle del error en lugar de dejar la pantalla en blanco.
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);

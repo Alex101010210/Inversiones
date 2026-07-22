@@ -1,3 +1,15 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Árbol de rutas principal de la aplicación.
+//
+// Estructura:
+//   /login    → página pública de inicio de sesión
+//   /register → página pública de registro
+//   /         → rutas protegidas (requieren JWT) envueltas en <Layout>
+//
+// PrivateRoute redirige al /login si no hay token en el store de autenticación.
+// El Layout incluye el sidebar, el selector de portafolio y las toasts de alertas.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store';
 import Layout from './components/ui/Layout';
@@ -16,6 +28,7 @@ import Settings from './pages/settings/Settings';
 import Watchlist from './pages/watchlist/Watchlist';
 import Screener from './pages/screener/Screener';
 
+// Guard de ruta: si no hay token redirige al login, si hay token renderiza los hijos
 function PrivateRoute({ children }) {
   const token = useAuthStore((s) => s.token);
   return token ? children : <Navigate to="/login" replace />;
@@ -24,8 +37,11 @@ function PrivateRoute({ children }) {
 export default function App() {
   return (
     <Routes>
+      {/* Rutas públicas */}
       <Route path="/login"    element={<Login />} />
       <Route path="/register" element={<Register />} />
+
+      {/* Rutas protegidas — todas dentro del Layout con sidebar */}
       <Route
         path="/"
         element={
@@ -42,7 +58,7 @@ export default function App() {
         <Route path="rebalance/:id"          element={<Rebalance />} />
         <Route path="operations"             element={<Operations />} />
         <Route path="risk"                   element={<Risk />} />
-        <Route path="analysis"               element={<Analysis />} />
+        <Route path="analysis"              element={<Analysis />} />
         <Route path="calculator"             element={<PositionCalculator />} />
         <Route path="ai"                     element={<AiPage />} />
         <Route path="settings"               element={<Settings />} />

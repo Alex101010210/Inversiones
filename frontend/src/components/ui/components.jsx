@@ -1,5 +1,8 @@
 import clsx from 'clsx';
 
+// ─── StatCard ─────────────────────────────────────────────────────────────────
+// Tarjeta de métrica con título, valor principal, subtexto y flecha de tendencia.
+// Se usa en el Dashboard, Risk y PortfolioDetail para mostrar KPIs.
 export function StatCard({ title, value, sub, trend, icon: Icon, color = 'blue' }) {
   const positive = trend > 0;
   const colorMap = { blue: 'text-brand-600', green: 'text-success', red: 'text-danger', yellow: 'text-warn' };
@@ -20,6 +23,8 @@ export function StatCard({ title, value, sub, trend, icon: Icon, color = 'blue' 
   );
 }
 
+// ─── PageHeader ───────────────────────────────────────────────────────────────
+// Encabezado estándar de página con título, subtítulo y botón de acción opcional.
 export function PageHeader({ title, subtitle, action }) {
   return (
     <div className="flex items-start justify-between mb-6">
@@ -32,6 +37,8 @@ export function PageHeader({ title, subtitle, action }) {
   );
 }
 
+// ─── Spinner ──────────────────────────────────────────────────────────────────
+// Indicador de carga animado en tres tamaños: sm, md, lg
 export function Spinner({ size = 'md' }) {
   const s = { sm: 'w-4 h-4', md: 'w-7 h-7', lg: 'w-10 h-10' }[size];
   return (
@@ -41,6 +48,8 @@ export function Spinner({ size = 'md' }) {
   );
 }
 
+// ─── EmptyState ───────────────────────────────────────────────────────────────
+// Pantalla vacía con título, descripción y acción opcional (botón para crear).
 export function EmptyState({ title, description, action }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -51,6 +60,8 @@ export function EmptyState({ title, description, action }) {
   );
 }
 
+// ─── Badge ────────────────────────────────────────────────────────────────────
+// Pastilla de color para tipos de activo (STOCK, ETF, CRYPTO…) y tipos de señal
 export function Badge({ type }) {
   const map = {
     STOCK:   'badge-blue',
@@ -70,6 +81,8 @@ export function Badge({ type }) {
   return <span className={map[type] ?? 'badge bg-gray-100 text-gray-700'}>{type}</span>;
 }
 
+// ─── PnLBadge ─────────────────────────────────────────────────────────────────
+// Muestra el P&L en % con color verde (positivo) o rojo (negativo)
 export function PnLBadge({ value }) {
   const pos = value >= 0;
   return (

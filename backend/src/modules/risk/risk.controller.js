@@ -1,8 +1,19 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Controlador de métricas de riesgo del portafolio.
+//
+// Calcula sobre una ventana de 90 días de historial de precios:
+//   - Max Drawdown:   caída máxima pico → valle (%)
+//   - Volatilidad:    desviación estándar de retornos diarios, anualizada
+//   - Sharpe Ratio:   retorno ajustado por riesgo (tasa libre de riesgo = 5%)
+//   - VaR 95%:        pérdida máxima esperada en un día con 95% de confianza
+// ─────────────────────────────────────────────────────────────────────────────
+
 const prisma = require('../../config/prisma');
 const { getLatestPrice } = require('../../config/marketData');
 
-// ─── Math helpers ─────────────────────────────────────────────────────────────
+// ─── Funciones matemáticas auxiliares ────────────────────────────────────────
 
+// Calcula los retornos diarios como variación porcentual entre días consecutivos
 function calcReturns(prices) {
   const returns = [];
   for (let i = 1; i < prices.length; i++) {
@@ -21,6 +32,7 @@ function stdDev(arr) {
   return Math.sqrt(variance);
 }
 
+// Drawdown máximo: mayor caída porcentual desde el pico hasta el valle
 function calcDrawdown(valueSeries) {
   let peak = -Infinity;
   let maxDD = 0;
@@ -32,6 +44,8 @@ function calcDrawdown(valueSeries) {
   return maxDD;
 }
 
+// Sharpe Ratio anualizado: (retorno promedio - tasa libre de riesgo) / desv. estándar
+// riskFreeRate = 5% anual → 0.05/252 por día
 function calcSharpe(returns, riskFreeRate = 0.05) {
   const annualRF = riskFreeRate / 252;
   const excess   = returns.map((r) => r - annualRF);
@@ -40,19 +54,19 @@ function calcSharpe(returns, riskFreeRate = 0.05) {
   return sigma === 0 ? 0 : (mu / sigma) * Math.sqrt(252);
 }
 
+// Volatilidad anualizada: desv. estándar de retornos diarios × √252
 function calcVolatility(returns) {
-  return stdDev(returns) * Math.sqrt(252); // annualised
+  return stdDev(returns) * Math.sqrt(252);
 }
 
-// VaR using historical simulation (95%)
+// VaR por simulación histórica: percentil (1-confidence) de los retornos ordenados
 function calcVaR(returns, confidence = 0.95) {
   const sorted = [...returns].sort((a, b) => a - b);
   const idx = Math.floor((1 - confidence) * sorted.length);
   return sorted[idx];
 }
 
-// ─── Controller ───────────────────────────────────────────────────────────────
-
+// ─── Calcular riesgo actual del portafolio ────────────────────────────────────
 const getPortfolioRisk = async (req, res, next) => {
   try {
     const portfolio = await prisma.portfolio.findFirst({
@@ -61,7 +75,7 @@ const getPortfolioRisk = async (req, res, next) => {
     });
     if (!portfolio) return res.status(404).json({ error: 'Portfolio not found' });
 
-    // Get 90-day price history for all holdings
+    // Obtener historial de precios de los últimos 90 días para todos los holdings
     const since = new Date(Date.now() - 90 * 86400000);
     let allReturns = [];
     let valueSeries = {};
@@ -76,22 +90,22 @@ const getPortfolioRisk = async (req, res, next) => {
 
       const closePrices = prices.map((p) => p.close);
       const returns     = calcReturns(closePrices);
-      allReturns.push(...returns);
+      allReturns.push(...returns); // agregar los retornos de este activo al pool total
 
-      // Build portfolio value time series weighted by quantity
+      // Construir la serie de valor total del portafolio día a día
       prices.forEach((p, i) => {
         const key = p.date.toISOString().split('T')[0];
         valueSeries[key] = (valueSeries[key] || 0) + p.close * h.quantity;
       });
     }
 
-    const valueArr  = Object.values(valueSeries);
-    const drawdown  = valueArr.length > 1 ? calcDrawdown(valueArr)    : 0;
+    const valueArr   = Object.values(valueSeries);
+    const drawdown   = valueArr.length > 1 ? calcDrawdown(valueArr)    : 0;
     const volatility = allReturns.length > 1 ? calcVolatility(allReturns) : 0;
     const sharpe     = allReturns.length > 1 ? calcSharpe(allReturns)    : 0;
     const var95      = allReturns.length > 1 ? calcVaR(allReturns)       : 0;
 
-    // Current total value (fall back to avgCostBasis if live price unavailable)
+    // Valor actual del portafolio usando precios en vivo (o costo promedio como fallback)
     const totalValue = await Promise.all(
       portfolio.holdings.map(async (h) => {
         const price = (await getLatestPrice(h.asset.symbol, h.asset.type)) ?? h.avgCostBasis;
@@ -102,15 +116,18 @@ const getPortfolioRisk = async (req, res, next) => {
     res.json({
       portfolioId:  portfolio.id,
       totalValue,
-      drawdown:     +(drawdown   * 100).toFixed(2),
-      volatility:   +(volatility * 100).toFixed(2),
+      drawdown:     +(drawdown   * 100).toFixed(2),   // en porcentaje
+      volatility:   +(volatility * 100).toFixed(2),   // en porcentaje anualizado
       sharpeRatio:  +sharpe.toFixed(4),
-      var95:        +(var95      * 100).toFixed(2),
+      var95:        +(var95      * 100).toFixed(2),   // en porcentaje
       calculatedAt: new Date(),
     });
   } catch (err) { next(err); }
 };
 
+// ─── Guardar snapshot de riesgo ───────────────────────────────────────────────
+// Persiste una fotografía de las métricas de riesgo en un momento dado
+// (útil para mostrar el historial de evolución del riesgo del portafolio)
 const saveSnapshot = async (req, res, next) => {
   try {
     const portfolio = await prisma.portfolio.findFirst({
@@ -134,6 +151,9 @@ const saveSnapshot = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ─── Historial de snapshots de riesgo ────────────────────────────────────────
+// Devuelve los snapshots guardados en los últimos N días para graficar
+// la evolución del drawdown y la volatilidad en el tiempo
 const getRiskHistory = async (req, res, next) => {
   try {
     const { days = 30 } = req.query;

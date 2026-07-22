@@ -1,16 +1,29 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Cliente HTTP centralizado (Axios) para todas las llamadas a la API del backend.
+//
+// Características:
+//   - Adjunta automáticamente el token JWT en cada petición (interceptor de request)
+//   - Si la respuesta es 401 desde nuestra API, cierra la sesión y redirige al login
+//   - Renueva el token automáticamente cada 6 horas (token refresh silencioso)
+//   - Todos los métodos retornan directamente res.data (sin necesidad de .data en cada uso)
+// ─────────────────────────────────────────────────────────────────────────────
+
 import axios from 'axios';
 import { useAuthStore } from '../store';
 
+// Instancia base apuntando a /api (el proxy de Vite redirige al backend en :3001)
 const api = axios.create({ baseURL: '/api' });
 
+// ─── Interceptor de petición: agrega el token JWT en el header ────────────────
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// ─── Auto-refresh stateless token ────────────────────────────────────────────
-// Once on app startup (and every 6h) check if the token needs rotation.
+// ─── Renovación automática del token (stateless) ─────────────────────────────
+// Una vez al iniciar la app y luego cada 6 horas verifica si el token necesita
+// ser renovado. Esto evita que el usuario sea deslogueado por expiración inesperada.
 let _refreshed = false;
 function scheduleTokenRefresh() {
   if (_refreshed) return;
@@ -20,20 +33,21 @@ function scheduleTokenRefresh() {
       const { token: newToken, user } = await api.post('/auth/refresh');
       const store = useAuthStore.getState();
       if (newToken && newToken !== store.token) {
-        store.setAuth(user, newToken);
+        store.setAuth(user, newToken); // actualizar el token en el store
       }
-    } catch { /* token still valid or user logged out */ }
+    } catch { /* token aún válido o usuario no logueado — ignorar silenciosamente */ }
   };
   attempt();
-  setInterval(attempt, 6 * 60 * 60 * 1000); // re-check every 6h
+  setInterval(attempt, 6 * 60 * 60 * 1000); // revisar cada 6 horas
 }
-// Run after a short delay to avoid blocking initial page load
+// Retrasar 5s para no bloquear la carga inicial de la página
 setTimeout(scheduleTokenRefresh, 5_000);
 
+// ─── Interceptor de respuesta: manejo global de errores ──────────────────────
 api.interceptors.response.use(
-  (res) => res.data,
+  (res) => res.data, // extraer directamente los datos de la respuesta
   (err) => {
-    // Solo desloguear si el 401 viene de NUESTRA API (/api/*), no de APIs externas
+    // Solo desloguear si el 401 viene de NUESTRA API (/api/*), no de servicios externos
     const url = err.config?.url ?? '';
     const isOwnApi = url.startsWith('/api') || url.startsWith('http://localhost');
     if (err.response?.status === 401 && isOwnApi) {
@@ -52,7 +66,7 @@ export const authApi = {
   refresh:  ()  => api.post('/auth/refresh'),
 };
 
-// ─── Portfolios ───────────────────────────────────────────────────────────────
+// ─── Portafolios ──────────────────────────────────────────────────────────────
 export const portfolioApi = {
   list:    ()        => api.get('/portfolios'),
   create:  (d)       => api.post('/portfolios', d),
@@ -62,10 +76,10 @@ export const portfolioApi = {
   holdings:(id)      => api.get(`/portfolios/${id}/holdings`),
 };
 
-// ─── Assets ───────────────────────────────────────────────────────────────────
+// ─── Activos (Assets) ─────────────────────────────────────────────────────────
 export const assetApi = {
   list:    (type)    => api.get('/assets', { params: { type } }),
-  // external=true → also queries Yahoo Finance for results not in local DB
+  // external=true → también consulta Yahoo Finance para resultados que no están en la BD local
   search:  (q, external = true) => api.get('/assets/search', { params: { q, external } }),
   get:     (symbol)  => api.get(`/assets/${symbol}`),
   price:   (symbol)  => api.get(`/assets/${symbol}/price`),
@@ -73,10 +87,10 @@ export const assetApi = {
   create:  (d)       => api.post('/assets', d),
 };
 
-// ─── Operations ───────────────────────────────────────────────────────────────
+// ─── Operaciones ──────────────────────────────────────────────────────────────
 export const operationApi = {
   list:   (params)   => api.get('/operations', { params }).then(r => {
-    // Backwards-compat: old backend returns array, new returns { ops, total, totalPages }
+    // Retrocompatibilidad: el backend antiguo devuelve array, el nuevo devuelve { ops, total, totalPages }
     if (Array.isArray(r)) return { ops: r, total: r.length, page: 1, pageSize: r.length, totalPages: 1 };
     return r;
   }),
@@ -86,22 +100,22 @@ export const operationApi = {
   delete: (id)       => api.delete(`/operations/${id}`),
 };
 
-// ─── Risk ─────────────────────────────────────────────────────────────────────
+// ─── Riesgo ───────────────────────────────────────────────────────────────────
 export const riskApi = {
   get:     (portfolioId)        => api.get(`/risk/portfolio/${portfolioId}`),
   history: (portfolioId, days)  => api.get(`/risk/portfolio/${portfolioId}/history`, { params: { days } }),
 };
 
-// ─── Analysis ────────────────────────────────────────────────────────────────
+// ─── Análisis técnico ─────────────────────────────────────────────────────────
 export const analysisApi = {
   rsi:    (symbol, params) => api.get(`/analysis/${symbol}/rsi`,  { params }),
   macd:   (symbol)         => api.get(`/analysis/${symbol}/macd`),
   sma:    (symbol, params) => api.get(`/analysis/${symbol}/sma`,  { params }),
   ema:    (symbol, params) => api.get(`/analysis/${symbol}/ema`,  { params }),
-  full:   (symbol)         => api.get(`/analysis/${symbol}/full`),
+  full:   (symbol)         => api.get(`/analysis/${symbol}/full`), // RSI + MACD + SMAs en una sola llamada
 };
 
-// ─── AI ───────────────────────────────────────────────────────────────────────
+// ─── IA ───────────────────────────────────────────────────────────────────────
 export const aiApi = {
   recommendations: (portfolioId) => api.get(`/ai/recommendations/${portfolioId}`),
   predict:         (symbol)      => api.get(`/ai/predict/${symbol}`),
@@ -118,9 +132,9 @@ export const dashboardApi = {
   benchmark:   (symbol, days)       => api.get('/dashboard/benchmark', { params: { symbol, days } }),
 };
 
-// ─── Export ──────────────────────────────────────────────────────────────────
+// ─── Exportar a CSV ───────────────────────────────────────────────────────────
 export const exportApi = {
-  // Descarga el CSV directamente desde el navegador
+  // Descarga el CSV directamente en el navegador sin pasar por el estado de React
   operations: (portfolioId) => {
     const token = useAuthStore.getState().token;
     const params = portfolioId ? `?portfolioId=${portfolioId}` : '';
@@ -135,15 +149,18 @@ export const exportApi = {
   },
 };
 
+// Helper: descarga un CSV usando fetch nativo para poder leer el nombre de archivo del header
 function downloadCsv(url, token) {
   fetch(url, { headers: { Authorization: `Bearer ${token}` } })
     .then(res => {
+      // Leer el nombre de archivo del header Content-Disposition
       const disposition = res.headers.get('Content-Disposition') ?? '';
       const match = disposition.match(/filename="?([^"]+)"?/);
       const filename = match ? match[1] : 'export.csv';
       return res.blob().then(blob => ({ blob, filename }));
     })
     .then(({ blob, filename }) => {
+      // Crear un enlace temporal para disparar la descarga
       const a = document.createElement('a');
       a.href  = URL.createObjectURL(blob);
       a.download = filename;
@@ -152,21 +169,21 @@ function downloadCsv(url, token) {
     });
 }
 
-// ─── Settings ────────────────────────────────────────────────────────────────
+// ─── Configuración de cuenta ──────────────────────────────────────────────────
 export const settingsApi = {
   get:             ()  => api.get('/settings'),
   updateProfile:   (d) => api.put('/settings/profile', d),
   changePassword:  (d) => api.put('/settings/password', d),
-  resetData:       ()  => api.delete('/settings/data'),
+  resetData:       ()  => api.delete('/settings/data'), // borra TODOS los datos del usuario
 };
 
-// ─── Alerts ──────────────────────────────────────────────────────────────────
+// ─── Alertas de precio ────────────────────────────────────────────────────────
 export const alertsApi = {
   list:   ()       => api.get('/alerts'),
   create: (d)      => api.post('/alerts', d),
   delete: (id)     => api.delete(`/alerts/${id}`),
-  toggle: (id)     => api.patch(`/alerts/${id}/toggle`),
-  check:  ()       => api.get('/alerts/check'),
+  toggle: (id)     => api.patch(`/alerts/${id}/toggle`), // activar/desactivar alerta
+  check:  ()       => api.get('/alerts/check'),           // verificar alertas disparadas
 };
 
 // ─── Watchlist ────────────────────────────────────────────────────────────────
@@ -176,7 +193,7 @@ export const watchlistApi = {
   remove: (id)     => api.delete(`/watchlist/${id}`),
 };
 
-// ─── Import ──────────────────────────────────────────────────────────────────
+// ─── Importar operaciones desde CSV ──────────────────────────────────────────
 export const importApi = {
   operations: (portfolioId, file) => {
     const form = new FormData();
@@ -188,11 +205,11 @@ export const importApi = {
   },
 };
 
-// ─── Screener ────────────────────────────────────────────────────────────────
+// ─── Screener de mercado ──────────────────────────────────────────────────────
 export const screenerApi = {
-  screen:       (params) => api.get('/screener',         { params }),
-  screenMarket: (params) => api.get('/screener/market',  { params }),
-  filters:      ()       => api.get('/screener/filters'),
+  screen:       (params) => api.get('/screener',         { params }), // filtra activos en BD
+  screenMarket: (params) => api.get('/screener/market',  { params }), // filtra activos en Yahoo Finance (tiempo real)
+  filters:      ()       => api.get('/screener/filters'),             // obtiene sectores y tipos disponibles
 };
 
 export default api;
